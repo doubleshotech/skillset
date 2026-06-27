@@ -1,33 +1,102 @@
-# Sentry setup (Workers API + Vite/React frontends)
+# Sentry setup — diagnose the repo, then wire
 
-A hands-off procedure to add Sentry to a new repo. Distilled from a working
-3-app setup (1 Cloudflare Workers API + 2 Vite/React SPAs in a pnpm monorepo,
-deployed by GitHub Actions). Follow the steps in order; each ends with a check.
+Add Sentry to **any** repo. There is no fixed stack here: first **diagnose** what the
+repo actually is (frameworks, runtimes, topology, where config lives), then apply the
+**universal principles** below using whatever SDK that stack needs. A fully-wired example
+(Cloudflare Workers API + Vite/React monorepo) follows — it is the template the
+principles point to, *not* an assumption about your repo.
 
-## 0. Read this before applying
+## Read first
 
-**Version stamp.** Written against `@sentry/cloudflare` and `@sentry/react`
-`^10.62.0` (June 2026). Three things below are version-specific and have
-already drifted once across a major (v10→v11): the `Sentry.withSentry(cb, app)`
-signature, the `dataCollection` option shape, and
-`tanstackRouterBrowserTracingIntegration`. **First action: check the installed
-major (`pnpm why @sentry/cloudflare` / `@sentry/react`) and confirm those three
-APIs against the current Sentry docs.** If the major is newer than 10, verify
-shapes before pasting — a stale API fails silently (events just never arrive).
+- **Confirm the SDK's APIs at call time — they drift.** Sentry's `init` call, integration
+  names, and PII-option shapes change across SDK majors and differ per platform. For the
+  SDK you select, verify the exact init + integration shapes against the **current Sentry
+  docs for that platform** (`sentry.io/platforms/<x>`) or the **Sentry MCP** before
+  pasting. A stale API fails silently — events just never arrive.
+- **Create your own Sentry projects — never reuse another repo's DSN.** A DSN routes
+  events to one project; copying one sends this repo's errors into *that* project. Use
+  **one project per app**. (DSNs in the example are `<PLACEHOLDERS>`.)
 
-**Stack assumptions.** This skill targets: API = Hono on Cloudflare Workers
-(`@sentry/cloudflare`); frontends = Vite + React + TanStack Router
-(`@sentry/react`); pnpm workspaces; deploy via GitHub Actions →
-Cloudflare (Workers + Pages). The sections are modular — a frontend-only or
-API-only repo lifts just the section it needs. If the new repo's stack differs
-(Node/Express, Next.js, react-router, npm/yarn), keep the **gotchas** (§7) and
-adapt the wiring; the SDK package and init call change, the lessons don't.
+## Diagnose the repo
 
-**Create your own Sentry projects — do NOT reuse another repo's DSNs.** A DSN
-routes events to one specific project/org. Copying a DSN from the source repo
-sends this new repo's errors into *that* project. Make a fresh org (or reuse
-yours) and **one project per app** (API, each frontend) so issues, quotas, and
-alerts stay separated. DSNs shown below are `<PLACEHOLDERS>`.
+Inspect the repo and answer these five questions **per deployable app**. Each answer
+feeds a specific setup step, so the diagnosis *is* the plan — don't take a generic
+inventory, answer exactly these:
+
+| Question | What it determines |
+|---|---|
+| **Topology** — how many deployable apps? each server- or client-side? mono/multi-repo, package manager, workspace tool? | **one Sentry project per app**, and which `@sentry/*` family each needs |
+| **Framework + runtime + entry point** — backend (Express/Fastify/Hono/NestJS/Next/Remix/Django/Rails/Go…), frontend (React/Vue/Svelte/Angular/SvelteKit…), runtime (Node/Bun/Deno/Workers/Lambda/browser), and where each app boots | the **SDK package** and **where `init` runs** (must be before any app code) |
+| **Error swallow points** — does the framework catch errors itself? error middleware, `onError`, route/render/error boundaries, custom try/catch | where to add **`captureException`** so framework-caught errors aren't lost — the highest-value, most framework-specific step |
+| **Where per-env config + secrets live** — env vars, `.env`, `wrangler.toml`, platform dashboard, CI secrets | where the **DSN + environment tag** go, per deploy env |
+| **Bundler / minification** — is client code minified (Vite/webpack/esbuild/Next/Rollup)? | whether **source maps** are needed for readable stack traces |
+
+Write the answers as a short plan — *app → SDK package → init location → swallow points →
+DSN location → source maps (y/n)* — and confirm it with the user before wiring.
+
+For an SDK you don't know cold, get the exact package + init shape from
+`sentry.io/platforms`, the Sentry MCP, or `npx @sentry/wizard@latest` (it auto-detects
+major JS frameworks — Next, React, Vue, SvelteKit, Remix, Node, etc. — and scaffolds
+`init` + source-map upload). **The wizard does NOT add the PII-safe config, dev/test
+quota gating, or swallow-point capture below** — those are this skill's value-add and run
+*after* it. Use it as a boilerplate accelerator, confirm its current coverage, and don't
+treat it as the whole setup.
+
+## Universal principles (apply on every stack)
+
+The SDK and exact syntax change per stack; these don't. The worked example shows each in
+real code (the `§` refs point there).
+
+1. **Init at the true entry, before app code** — so Sentry wraps everything: a frontend
+   `instrument` module imported first; a server entry wrapped at export. → §3b, §4a–§4b.
+2. **Report at swallow points** — a top-level wrapper misses errors the framework
+   catches. Add `captureException` at each one the diagnosis found: error middleware /
+   `onError` / route + render error boundaries / custom try-catch. The most
+   stack-specific step. → §3b, §4c.
+3. **PII-safe by default — all-or-nothing.** Explicitly disable **every** PII vector
+   (client IP, cookies, request/response headers, bodies, query params). The trap: a
+   *partial* privacy config makes the SDK inherit **permissive** defaults for everything
+   you didn't name — a silent leak. Mechanism is per-SDK: `@sentry/cloudflare` uses a
+   `dataCollection` block (§3c); most Node/browser SDKs use `sendDefaultPii: false` plus
+   a `beforeSend`/`beforeSendLog` scrub. **Whatever the mechanism, the PII-negative check
+   under _Verify_ is the real gate.** Non-negotiable for any app carrying auth or personal
+   data (especially minors').
+4. **DSN is public config, not a secret** — it ships in client bundles anyway, so a plain
+   env var keeps deploys automated. But each app needs its **own** project DSN or events
+   cross-contaminate. → §3d, §4d, §5.
+5. **Guard the sample rate** — `Number(badValue)` → `NaN`, which Sentry treats as invalid
+   and silently drops every span. Always `Number.isFinite(rate) ? rate : 1.0`. → §3b, §4a.
+6. **Gate dev + tests OFF in code, not config** — a fresh clone must be quiet by default;
+   don't rely on nobody setting a DSN locally. DSN → `undefined` in local dev, forced
+   empty in tests. → §3b, §4a, §3e, §6.
+7. **Tag the environment** per deploy env (`uat`/`production`/…) so issues, quotas, and
+   alerts separate. → §3d, §5.
+8. **Source maps for minified clients** — without them deployed stack traces are
+   unreadable, and triage can't locate frames. → §8.
+
+## Verify (do not skip — the universal gate)
+
+Stack-independent. The PII check backstops a wrong per-SDK privacy config on *any* stack.
+
+1. **Positive path** — in a deployed/staging env, throw a test error in each app → it
+   appears in that app's Sentry project with the right `environment` tag.
+2. **PII-negative** (the non-negotiable gate) — open that event in Sentry and confirm it
+   carries **no** client IP, request/response headers, cookies, body, or query params. If
+   any appear, your privacy config is partial — fix it before shipping.
+3. **Quiet path** — run each app locally + run the test suite → **zero** new events land
+   in any project.
+
+---
+
+## Worked example — Cloudflare Workers API + Vite/React monorepo
+
+A fully-wired stack the principles point to: 1 Hono-on-Cloudflare-Workers API
+(`@sentry/cloudflare`) + 2 Vite + React + TanStack Router SPAs (`@sentry/react`) in a
+pnpm monorepo, deployed by GitHub Actions → Cloudflare (Workers + Pages). Sections are
+modular — lift the one matching your detected stack. Different stack? The SDK package and
+`init` call change; the principles and gotchas don't. (Pinned against `@sentry/*`
+`^10.62.0`; re-verify the `withSentry(cb, app)` signature, the `dataCollection` shape, and
+`tanstackRouterBrowserTracingIntegration` on any major bump — see **Read first**.)
 
 ## 1. Prerequisites
 
@@ -96,7 +165,7 @@ export default Sentry.withSentry((env: Env) => {
     dsn: isLocalApiUrl(env.API_URL) ? undefined : env.SENTRY_DSN,
     environment: env.SENTRY_ENVIRONMENT,
     tracesSampleRate: Number.isFinite(rate) ? rate : 1.0,
-    enableLogs: true,            // ships console.* to Sentry Logs — see §7 PII note
+    enableLogs: true,            // ships console.* to Sentry Logs — see §8 (log PII)
     dataCollection: PII_SAFE_DATA_COLLECTION,   // ⚠️ MANDATORY — see §3c
   }
 }, app)
@@ -135,7 +204,7 @@ const PII_SAFE_DATA_COLLECTION = {
 }
 ```
 
-Do not reintroduce a partial `dataCollection` later. **Verify in §7.**
+Do not reintroduce a partial `dataCollection` later. **Verify it under _Verify_, above.**
 
 ### 3d. `wrangler.toml` — DSN + environment per deploy env
 
@@ -270,17 +339,6 @@ Three gates, all in code (not config), so a fresh clone is quiet by default:
 deployed `[vars]` host) defeats the gate and sends dev events. Keep your dev
 script injecting a localhost `API_URL`.
 
-## 7. ⚠️ Verification (do not skip)
-
-1. **Positive path:** in a deployed/staging env, throw a test error in an API
-   route and in a frontend route → both appear in their Sentry projects with
-   the right `environment` tag.
-2. **PII-negative (the §3c payoff):** open that API event in Sentry and confirm
-   it carries **no** client IP, request/response headers, cookies, body, or
-   query params. If any appear, your `dataCollection` is partial — fix it.
-3. **Quiet path:** run the API and a frontend locally + run the test suite →
-   confirm **zero** new events land in any project.
-
 ## 8. Optional follow-ups (don't block a hands-off run)
 
 - **Source maps** (deployed stack traces are minified without them): add
@@ -294,7 +352,8 @@ script injecting a localhost `API_URL`.
 ## 9. Gotchas quick-reference
 
 - **`dataCollection` is all-or-nothing** — any object → permissive base; a
-  partial one silently leaks IP/PII (§3c). The single biggest trap.
+  partial one silently leaks IP/PII (§3c). The single biggest trap. (Per-SDK:
+  Node/browser equivalents are `sendDefaultPii: false` + `beforeSend`.)
 - **DSN is public** → config, not a secret; keeps deploys automated. But each
   app/repo needs its **own** project DSN or events cross-contaminate.
 - **NaN trace rate** — `Number(badValue)` is NaN → Sentry drops every span.
@@ -306,4 +365,4 @@ script injecting a localhost `API_URL`.
   `captureException` at `onError`, custom try/catch blocks, and route error
   boundaries.
 - **Version drift** — re-verify `withSentry` signature, `dataCollection` shape,
-  and the router integration name on any `@sentry/*` major bump (§0).
+  and the router integration name on any `@sentry/*` major bump (see **Read first**).

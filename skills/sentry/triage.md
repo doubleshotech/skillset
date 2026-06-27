@@ -17,7 +17,7 @@ auto-fix costs more than an unfixed error.
   `project:read`, `org:read`) in the environment — a *real secret*, never
   committed. If it's missing, stop and ask for one; do not invent it.
 - **Resolve org + project.** Get the project id from the DSN already in the repo
-  (`wrangler.toml [vars] SENTRY_DSN` / CI env — see setup.md §3d), or ask.
+  (env var, `.env`, `wrangler.toml`, platform dashboard, or CI — see setup.md), or ask.
   Confirm which app you're triaging and which environment (default `production`).
 
 ## 1. List issues (ranked, capped)
@@ -66,7 +66,7 @@ Classify each issue **confident** or **uncertain**. When in doubt → uncertain.
 
 - Cause is unclear, or the top frame is in a dependency / not `in_app`.
 - A frontend frame is **minified with no source map** — you can't locate it
-  confidently. Fix source maps first (setup.md §8), then re-triage.
+  confidently. Fix source maps first (setup.md → source maps), then re-triage.
 - It needs a product/business decision, or changes behavior in a judgement-y way.
 - Infra/flaky: timeouts, rate limits, network blips, third-party outages.
 - You can't reproduce it / can't write a failing test.
@@ -114,7 +114,7 @@ not silently skip them.
 ## 6. Verify
 
 Per-PR typecheck/tests are green. True verification — the error stops arriving —
-only happens after deploy; tie back to setup.md §7. Note in each PR that the fix
+only happens after deploy; tie back to setup.md → Verify. Note in each PR that the fix
 should be confirmed against the live Sentry issue post-release.
 
 ## Gotchas
@@ -122,7 +122,7 @@ should be confirmed against the live Sentry issue post-release.
 - **PII on the read path** — pulled events may carry IP / headers / body (older
   events, or projects not configured PII-safe). Never paste raw payloads into
   PRs, commits, or logs. Redact to the frame + message.
-- **Minified frames = uncertain** — no source map, no confident fix (setup.md §8).
+- **Minified frames = uncertain** — no source map, no confident fix (setup.md → source maps).
 - **Release skew** — an issue may already be fixed; check `lastSeen` vs the
   deployed release before touching it.
 - **Read-only token** — listing/reading never needs write scope; keep the token

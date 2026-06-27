@@ -18,25 +18,26 @@ as `/skillset:<name>`.
 
 | Skill | What it does |
 |-------|--------------|
-| `sentry` | Sentry error monitoring end to end for a pnpm monorepo (Hono-on-Cloudflare-Workers API + Vite/React/TanStack-Router frontends, GitHub Actions deploy). Two workflows: **setup** — SDK wiring, a PII-safe `dataCollection` block (a real leak if skipped), free-plan quota gating, per-env public DSNs, CI; **triage & fix** — list live errors, fix the confident ones (one PR per root-cause fix), leave uncertain issues for human review. |
+| `sentry` | Sentry error monitoring for **any** repo. **setup** — diagnose the repo's stack (frameworks, runtimes, topology, where config lives) and wire Sentry accordingly: SDK init, error swallow-point capture, a PII-safe config (a real leak if skipped), dev/test quota gating, per-env public DSNs, CI; ships a fully worked Cloudflare-Workers + Vite/React example. **triage & fix** — list live errors, fix the confident ones (one PR per root-cause fix), leave uncertain issues for human review. |
 
 ## Install
 
 ```
 /plugin marketplace add doubleshotech/skillset
-/plugin install skillset@skillset
+/plugin install skillset@doubleshot
 ```
 
-`skillset@skillset` is `<plugin>@<marketplace>` — both are `skillset` here (the plugin
-name from `plugin.json`, the marketplace name from `marketplace.json`). The install
-persists across sessions and auto-updates on every pushed commit.
+`skillset@doubleshot` is `<plugin>@<marketplace>`: the **plugin** name `skillset` (from
+`plugin.json`) and the **marketplace** name `doubleshot` (from `marketplace.json`'s
+`name` field — *not* the GitHub owner, which only appears in the `marketplace add` path).
+The install persists across sessions and auto-updates on every pushed commit.
 
 ### Verify / manage
 
 ```
 /plugin                            # browse installed plugins and their skills
-/plugin marketplace list           # confirm the 'skillset' marketplace is registered
-/plugin update skillset@skillset   # pull the latest commit immediately
+/plugin marketplace list           # confirm the 'doubleshot' marketplace is registered
+/plugin update skillset@doubleshot   # pull the latest commit immediately
 ```
 
 Once installed, the `sentry` skill is available to Claude automatically (by its
@@ -61,7 +62,7 @@ git add -A && git commit -m "tweak sentry triage gate" && git push
 
 - **At session start**, Claude compares the cached SHA against the remote's latest
   commit; if they differ it re-fetches the plugin — the automatic path.
-- **Mid-session**, `/plugin update skillset@skillset` forces that check immediately.
+- **Mid-session**, `/plugin update skillset@doubleshot` forces that check immediately.
 
 The push matters: remote installs track the **pushed** commit, so an unpushed local
 commit won't roll out.
