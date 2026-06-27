@@ -1,0 +1,11 @@
+{
+  "name": "skillset",
+  "owner": { "name": "Ryan" },
+  "plugins": [
+    {
+      "name": "skillset",
+      "source": "./",
+      "description": "Internal collection of skills. Versionless on purpose so local edits auto-apply (in a git repo) without a version bump."
+    }
+  ]
+}

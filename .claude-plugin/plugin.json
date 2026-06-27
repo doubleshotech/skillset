@@ -1,0 +1,6 @@
+{
+  "name": "skillset",
+  "displayName": "Skillset",
+  "description": "Internal collection of skills. Versionless on purpose so local edits auto-apply without a version bump.",
+  "author": { "name": "Ryan" }
+}
