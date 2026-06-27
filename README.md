@@ -3,12 +3,12 @@
 A Claude Code plugin bundling reusable skills, installed from this GitHub repo as a
 one-plugin marketplace. **Intentionally versionless** — the `version` field is omitted
 from `.claude-plugin/plugin.json`, so Claude Code falls back to the git commit SHA as the
-version. Every **pushed** commit is a new version and is re-fetched, so skill edits roll
-out automatically with **no version bumps**.
+version. Every **pushed** commit is a new version, so with marketplace **auto-update
+enabled** (a one-time toggle — see below), skill edits roll out with **no version bumps**.
 
-> A versionless plugin only auto-updates from a git source — see
-> [How auto-update works](#how-auto-update-works). To ship a change you commit **and
-> push**; installs pick it up on the next session (or `/plugin update` now).
+> A versionless plugin only auto-updates from a git source, and only when the marketplace
+> has auto-update on (off by default for third-party marketplaces) — see
+> [How auto-update works](#how-auto-update-works). To ship a change: commit **and push**.
 
 ## Skills
 
@@ -45,27 +45,43 @@ Once installed, the `sentry` skill is available to Claude automatically (by its
 
 ## How auto-update works
 
-The "no version → auto-update" behavior is exact. Claude Code resolves a plugin's
-version in this order:
+Versioning falls back to the git commit SHA (no `version` is declared anywhere), so every
+pushed commit is a new version. But Claude Code only auto-pulls new commits when
+**auto-update is enabled for the marketplace** — and for a third-party marketplace like
+this one it is **off by default**. Enable it once:
 
-1. `version` in `.claude-plugin/plugin.json` — **omitted here**
-2. `version` in the `marketplace.json` entry — **omitted here**
-3. **git commit SHA** ← this repo lands here
-4. `"unknown"` (non-git directories / npm sources)
+- **UI:** `/plugin` → **Marketplaces** → select `doubleshot` → **Enable auto-update**, or
+- **`~/.claude/settings.json`** (declarative / portable):
 
-Neither file declares a version, so **the commit SHA *is* the version** and every pushed
-commit is a new version. To ship a change:
+  ```json
+  {
+    "extraKnownMarketplaces": {
+      "doubleshot": {
+        "source": { "source": "github", "repo": "doubleshotech/skillset" },
+        "autoUpdate": true
+      }
+    },
+    "enabledPlugins": { "skillset@doubleshot": true }
+  }
+  ```
+
+With auto-update on, **each session start** Claude fetches the marketplace, detects the new
+commit SHA, updates the plugin, and prompts `/reload-plugins`. So to ship a change:
 
 ```bash
 git add -A && git commit -m "tweak sentry triage gate" && git push
 ```
 
-- **At session start**, Claude compares the cached SHA against the remote's latest
-  commit; if they differ it re-fetches the plugin — the automatic path.
-- **Mid-session**, `/plugin update skillset@doubleshot` forces that check immediately.
+To pull **immediately** (or any time auto-update is off):
 
-The push matters: remote installs track the **pushed** commit, so an unpushed local
-commit won't roll out.
+```
+/plugin marketplace update doubleshot     # refresh the marketplace clone
+/plugin update skillset@doubleshot        # update the installed plugin
+```
+
+Version resolution order: `plugin.json` version → `marketplace.json` entry version → **git
+commit SHA** (this repo) → `"unknown"` (non-git / npm). The push matters: remote installs
+track the **pushed** commit, so an unpushed local commit won't roll out.
 
 ## Adding a skill
 
