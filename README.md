@@ -30,14 +30,17 @@ as `/skillset:<name>`.
 `skillset@doubleshot` is `<plugin>@<marketplace>`: the **plugin** name `skillset` (from
 `plugin.json`) and the **marketplace** name `doubleshot` (from `marketplace.json`'s
 `name` field — *not* the GitHub owner, which only appears in the `marketplace add` path).
-The install persists across sessions and auto-updates on every pushed commit.
+The install persists across sessions; once auto-update is enabled it pulls every pushed
+commit (off by default for third-party marketplaces — see
+[How auto-update works](#how-auto-update-works)).
 
 ### Verify / manage
 
 ```
-/plugin                            # browse installed plugins and their skills
-/plugin marketplace list           # confirm the 'doubleshot' marketplace is registered
-/plugin update skillset@doubleshot   # pull the latest commit immediately
+/plugin                                # browse installed plugins and their skills
+/plugin marketplace list               # confirm the 'doubleshot' marketplace is registered
+/plugin marketplace update doubleshot  # refresh the marketplace clone
+/plugin update skillset@doubleshot     # then pull the latest commit
 ```
 
 Once installed, the `sentry` skill is available to Claude automatically (by its
@@ -50,8 +53,11 @@ pushed commit is a new version. But Claude Code only auto-pulls new commits when
 **auto-update is enabled for the marketplace** — and for a third-party marketplace like
 this one it is **off by default**. Enable it once:
 
-- **UI:** `/plugin` → **Marketplaces** → select `doubleshot` → **Enable auto-update**, or
-- **`~/.claude/settings.json`** (declarative / portable):
+- **UI (simplest, per-user):** `/plugin` → **Marketplaces** → select `doubleshot` →
+  **Enable auto-update**, or
+- **`~/.claude/settings.json`** — declare the `autoUpdate` field (this is the form
+  managed/enterprise settings use; if a personal entry doesn't take effect, fall back to
+  the UI toggle above):
 
   ```json
   {
@@ -103,4 +109,5 @@ description: <what it does + the triggers/phrasing that should invoke it>
 ...procedure...
 ```
 
-Then commit and push — installs pick it up next session (or `/plugin update` now).
+Then commit and push — with auto-update enabled, installs pick it up next session
+(otherwise `/plugin update` now).
