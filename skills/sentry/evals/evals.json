@@ -1,0 +1,60 @@
+{
+  "skill_name": "sentry",
+  "note": "Eval covers the SETUP workflow only. Each eval runs against a pristine, Sentry-less repo whose error path is a try/catch that swallows the error and returns 500 (invisible to Sentry auto-instrumentation) - so capturing it requires the skill's distinctive swallow-point step. Grading is deterministic via grade_repo.py.",
+  "evals": [
+    {
+      "id": 0,
+      "name": "express",
+      "prompt": "Add Sentry error monitoring to this Express API (the repo at ./). Wire it up properly for production use.",
+      "expected_output": "Sentry @sentry/node installed and initialized before app code; captureException added in the users route's swallowing catch block; PII disabled explicitly; DSN from env (no hardcoded DSN); dev and tests gated off in code.",
+      "files": ["fixtures/repo-express"],
+      "expectations": [
+        "Sentry SDK dependency added to package.json",
+        "Sentry SDK is initialized (init call present)",
+        "Sentry init runs before app code (separate instrument module imported first, or init precedes express())",
+        "captureException added at the swallow point (routes/users.js catch/except block)",
+        "PII-safe config (PII vectors disabled; sendDefaultPii not enabled)",
+        "DSN sourced from env/config (not a hardcoded ingest URL)",
+        "Dev/test environments gated off in code (DSN disabled locally / in tests)",
+        "Sample rate guarded against NaN (or set to a literal)",
+        "A diagnosis/plan was produced before wiring (app -> SDK -> init -> swallow points -> DSN)"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "nextjs",
+      "prompt": "Set up Sentry in this Next.js (App Router) app (the repo at ./). I want errors reported in production.",
+      "expected_output": "Sentry @sentry/nextjs installed; init in Next instrumentation/config files; captureException in the /api/widgets route's swallowing catch; PII disabled; DSN from env; dev/tests gated off.",
+      "files": ["fixtures/repo-nextjs"],
+      "expectations": [
+        "Sentry SDK dependency added to package.json",
+        "Sentry SDK is initialized (init call present)",
+        "Sentry init lives in Next instrumentation/config files (loaded before app code)",
+        "captureException added at the swallow point (api/widgets/route.ts catch/except block)",
+        "PII-safe config (PII vectors disabled; sendDefaultPii not enabled)",
+        "DSN sourced from env/config (not a hardcoded ingest URL)",
+        "Dev/test environments gated off in code (DSN disabled locally / in tests)",
+        "Sample rate guarded against NaN (or set to a literal)",
+        "A diagnosis/plan was produced before wiring (app -> SDK -> init -> swallow points -> DSN)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "django",
+      "prompt": "Please add Sentry to this Django service (the repo at ./) so we catch errors in production.",
+      "expected_output": "sentry-sdk installed; sentry_sdk.init in settings.py with DjangoIntegration; capture_exception in the widget_detail view's swallowing except; send_default_pii=False; DSN from env; gated off when DEBUG/tests.",
+      "files": ["fixtures/repo-django"],
+      "expectations": [
+        "Sentry SDK dependency added to requirements.txt",
+        "Sentry SDK is initialized (init call present)",
+        "Sentry init lives in settings.py (loaded at startup, before requests)",
+        "captureException added at the swallow point (widgets/views.py catch/except block)",
+        "PII-safe config (PII vectors disabled; sendDefaultPii not enabled)",
+        "DSN sourced from env/config (not a hardcoded ingest URL)",
+        "Dev/test environments gated off in code (DSN disabled locally / in tests)",
+        "Sample rate guarded against NaN (or set to a literal)",
+        "A diagnosis/plan was produced before wiring (app -> SDK -> init -> swallow points -> DSN)"
+      ]
+    }
+  ]
+}
