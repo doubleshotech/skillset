@@ -31,8 +31,10 @@ Sentry error monitoring for **any** repo. Pick the workflow, then read that file
 - **DSN vs auth token.** The **DSN** is *public* config (it ships in the client
   bundle) and routes events to one project — it lives wherever per-env config
   does (env vars, `.env`, `wrangler.toml`, the platform dashboard, CI). The
-  **auth token** (`SENTRY_AUTH_TOKEN`) is a *real secret*, read-scoped, used only
-  to *query* issues during triage — never commit it.
+  **auth token** (`SENTRY_AUTH_TOKEN`) is a *real secret* — never commit it.
+  Triage *reads* issues (read scopes) and, to mark a handled issue **in progress**,
+  *assigns* it, which needs **`event:write`**; a read-only token works only if you
+  skip the assignment step.
 - **One project per app.** Each deployable app reports to its own Sentry project,
   so issues, quotas, and alerts stay separated.
 - **Find the project from the repo.** The project id is embedded in the DSN that
